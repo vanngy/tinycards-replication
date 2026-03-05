@@ -1,5 +1,6 @@
 import { makeDeck } from './logic/makeDeck.js';
-import { loadFromStorage, saveToStorage } from './storage.js';
+import { loadFromStorage, saveToStorage, serializeState, onAfterSave, loadSyncConfig, saveSyncConfig } from './storage.js';
+import { findExistingGist, fetchGist, pushGist, createGist } from './sync.js';
 import { HomePage } from './pages/Home.js';
 import { DeckView } from './pages/DeckView.js';
 import { StudyView } from './pages/StudyView.js';
@@ -36,9 +37,61 @@ const state = {
   routeParams: {},
   decks: [],
   session: null,
+  sync: { status: 'idle', message: '' },
+  syncActions: {},
 };
 
-function initState() {
+// ── Sync helpers ──────────────────────────────────────────────────────────────
+let pushTimer = null;
+
+function schedulePush(data) {
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(async () => {
+    const cfg = loadSyncConfig();
+    if (!cfg.token || !cfg.gistId) return;
+    try {
+      await pushGist(cfg.token, cfg.gistId, data);
+      state.sync = { status: 'ok', message: '' };
+    } catch (e) {
+      state.sync = { status: 'error', message: e.message };
+    }
+  }, 3000);
+}
+
+function applyGistData(data) {
+  if (!data || !Array.isArray(data.decks)) return;
+  state.decks = data.decks.map(d => {
+    if (d.id === GLOBALIZATION_ID && !d.cards[0]?.topic) {
+      return makeDeck(d.id, d.title, GLOBALIZATION_CARDS, d.progress, d.topicProgress || {}, d.batchNames || []);
+    }
+    return makeDeck(d.id, d.title, d.cards, d.progress, d.topicProgress || {}, d.batchNames || []);
+  });
+  if (!state.decks.find(d => d.id === GLOBALIZATION_ID)) {
+    state.decks.unshift(makeDeck(GLOBALIZATION_ID, 'Globalization', GLOBALIZATION_CARDS, null, {}, []));
+  }
+  saveToStorage(state, { triggerSync: false });
+}
+
+state.syncActions.connect = async function (token) {
+  const cfg = loadSyncConfig();
+  let gistId = cfg.gistId ?? await findExistingGist(token);
+  if (gistId) {
+    const data = await fetchGist(token, gistId);
+    applyGistData(data);
+  } else {
+    gistId = await createGist(token, serializeState(state));
+  }
+  saveSyncConfig({ token, gistId });
+  state.sync = { status: 'ok', message: '' };
+};
+
+state.syncActions.disconnect = function () {
+  saveSyncConfig({ token: null, gistId: null });
+  state.sync = { status: 'idle', message: '' };
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function initState() {
   const saved = loadFromStorage();
   if (saved && Array.isArray(saved.decks) && saved.decks.length > 0) {
     state.decks = saved.decks.map(d => {
@@ -54,6 +107,20 @@ function initState() {
   if (!state.decks.find(d => d.id === GLOBALIZATION_ID)) {
     state.decks.unshift(makeDeck(GLOBALIZATION_ID, 'Globalization', GLOBALIZATION_CARDS, null, {}, []));
     saveToStorage(state);
+  }
+
+  onAfterSave(schedulePush);
+
+  // Pull from gist on startup if already configured
+  const cfg = loadSyncConfig();
+  if (cfg.token && cfg.gistId) {
+    try {
+      const data = await fetchGist(cfg.token, cfg.gistId);
+      applyGistData(data);
+      state.sync = { status: 'ok', message: '' };
+    } catch (e) {
+      state.sync = { status: 'error', message: e.message };
+    }
   }
 }
 
@@ -94,5 +161,4 @@ function renderApp() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-initState();
-renderApp();
+initState().then(() => renderApp());

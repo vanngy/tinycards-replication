@@ -1,4 +1,4 @@
-const CACHE = 'flashcard-trainer-v1';
+const CACHE = 'flashcard-trainer-v2';
 
 const ASSETS = [
   '.',
@@ -8,6 +8,7 @@ const ASSETS = [
   'src/style.css',
   'src/App.js',
   'src/storage.js',
+  'src/sync.js',
   'src/utils.js',
   'src/logic/checkAnswer.js',
   'src/logic/studySession.js',
