@@ -8,6 +8,51 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function collectLeafNodes(nodes, acc) {
+  for (const node of nodes) {
+    if (node.directCards.length > 0) acc.push(node);
+    if (node.children.length > 0) collectLeafNodes(node.children, acc);
+  }
+}
+
+function childProgressHtml(children) {
+  const rows = children.map(child => {
+    const leaves = [];
+    collectLeafNodes([child], leaves);
+    let mastered = 0, total = 0;
+    for (const leaf of leaves) {
+      total += leaf.batches.length;
+      mastered += (leaf.progress?.batches || []).filter(b => b.status === 'mastered').length;
+    }
+    const pct = total > 0 ? Math.round(mastered / total * 100) : 0;
+    return `
+      <div class="topic-progress__row">
+        <span class="topic-progress__label">${escHtml(child.label)}</span>
+        <div class="topic-progress__bar"><div class="topic-progress__fill" style="width:${pct}%"></div></div>
+        <span class="topic-progress__pct">${pct}%</span>
+      </div>`;
+  }).join('');
+  return `<div class="topic-progress">${rows}</div>`;
+}
+
+function isNodeMastered(node) {
+  if (node.directCards.length > 0) {
+    return node.progress?.deckComplete === true;
+  }
+  if (node.children.length === 0) return false;
+  return node.children.every(child => isNodeMastered(child));
+}
+
+function computeLockedSet(items) {
+  const locked = new Set();
+  for (let i = 1; i < items.length; i++) {
+    if (!isNodeMastered(items[i - 1])) {
+      locked.add(items[i].label);
+    }
+  }
+  return locked;
+}
+
 export function ColumnBrowser({ topicTree, selectedPath, onSelect, onStudy }) {
   // Walk selectedPath to resolve selectedNodes[0..2]
   const selectedNodes = [];
@@ -25,18 +70,24 @@ export function ColumnBrowser({ topicTree, selectedPath, onSelect, onStudy }) {
     selectedNodes[1]?.children ?? [],
   ];
 
+  const lockedSets = colData.map(items => computeLockedSet(items));
+
   function renderCol(items, colIndex) {
     if (items.length === 0) {
       return `<div class="col-browser__col col-browser__col--empty" data-col="${colIndex}"></div>`;
     }
+    const lockedSet = lockedSets[colIndex];
     const itemsHtml = items.map(node => {
       const isSelected = selectedNodes[colIndex]?.label === node.label;
+      const isLocked = lockedSet.has(node.label);
       const hasChildren = node.children.length > 0;
       const selClass = isSelected ? ' col-browser__item--selected' : '';
+      const lockClass = isLocked ? ' col-browser__item--locked' : '';
       const arrow = hasChildren ? `<span class="col-browser__arrow">›</span>` : '';
-      return `<div class="col-browser__item${selClass}" data-label="${escHtml(node.label)}" data-col="${colIndex}">
+      const lockIcon = isLocked ? `<span class="col-browser__lock">🔒</span>` : '';
+      return `<div class="col-browser__item${selClass}${lockClass}" data-label="${escHtml(node.label)}" data-col="${colIndex}">
         <span class="col-browser__item-label">${escHtml(node.label)}</span>
-        ${arrow}
+        ${lockIcon}${arrow}
       </div>`;
     }).join('');
     return `<div class="col-browser__col" data-col="${colIndex}">${itemsHtml}</div>`;
@@ -46,6 +97,10 @@ export function ColumnBrowser({ topicTree, selectedPath, onSelect, onStudy }) {
 
   // Deepest selected node is the active node
   const activeNode = selectedNodes[selectedNodes.length - 1] ?? null;
+  const activeColIndex = selectedNodes.length - 1;
+  const isActiveLocked = activeNode
+    ? (lockedSets[activeColIndex] ?? new Set()).has(activeNode.label)
+    : false;
 
   let panelHtml = '';
   if (activeNode) {
@@ -56,19 +111,31 @@ export function ColumnBrowser({ topicTree, selectedPath, onSelect, onStudy }) {
         highestUnlocked: activeNode.progress.highestUnlockedBatch,
         deckComplete: activeNode.progress.deckComplete || false,
       });
-      const btnHtml = activeNode.progress.deckComplete
-        ? `<p class="deck-complete-msg">All batches mastered!</p>`
-        : `<button class="btn btn--primary btn--full study-btn">
+      let btnHtml;
+      if (activeNode.progress.deckComplete) {
+        btnHtml = `<p class="deck-complete-msg">All batches mastered!</p>`;
+      } else if (isActiveLocked) {
+        btnHtml = `<button class="btn btn--primary btn--full study-btn" disabled>🔒 Locked</button>`;
+      } else {
+        btnHtml = `<button class="btn btn--primary btn--full study-btn">
             ${activeNode.progress.highestUnlockedBatch === 0
               ? 'Start Batch 1'
               : `Continue — Batch ${activeNode.progress.highestUnlockedBatch + 1}`}
            </button>`;
+      }
       panelHtml = `
         <div class="col-browser__panel">
           <div class="col-browser__panel-title">${escHtml(activeNode.label)}</div>
           <div class="col-browser__panel-meta">${activeNode.directCards.length} cards &middot; ${activeNode.batches.length} batch${activeNode.batches.length !== 1 ? 'es' : ''}</div>
           ${bp.html}
           ${btnHtml}
+        </div>`;
+    } else if (activeNode.children.length > 0) {
+      panelHtml = `
+        <div class="col-browser__panel">
+          <div class="col-browser__panel-title">${escHtml(activeNode.label)}</div>
+          <div class="col-browser__panel-meta">${activeNode.children.length} subtopic${activeNode.children.length !== 1 ? 's' : ''}</div>
+          ${childProgressHtml(activeNode.children)}
         </div>`;
     } else {
       panelHtml = `
@@ -90,13 +157,16 @@ export function ColumnBrowser({ topicTree, selectedPath, onSelect, onStudy }) {
         item.addEventListener('click', () => {
           const label = item.dataset.label;
           const colIndex = parseInt(item.dataset.col, 10);
+          if (lockedSets[colIndex].has(label)) return;
           const newPath = selectedPath.slice(0, colIndex).concat(label);
           onSelect(newPath);
         });
       });
       const studyBtn = root.querySelector('.study-btn');
       if (studyBtn) {
-        studyBtn.addEventListener('click', () => onStudy(activeNode));
+        studyBtn.addEventListener('click', () => {
+          if (!isActiveLocked) onStudy(activeNode);
+        });
       }
     },
   };

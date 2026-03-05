@@ -693,6 +693,83 @@ h2 {
   }
 }
 
+/* ── Progress summary (flat decks) ──────────────────────────────────────── */
+.progress-summary {
+  margin-bottom: 20px;
+}
+.progress-bar {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.progress-bar__fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+.progress-summary__stats {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* ── Per-topic progress rows (topic decks) ──────────────────────────────── */
+.topic-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 20px;
+}
+.topic-progress__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+.topic-progress__label {
+  flex: 0 0 auto;
+  width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--text);
+}
+.topic-progress__bar {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.topic-progress__fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.topic-progress__pct {
+  flex: 0 0 36px;
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* ── Locked topic item ──────────────────────────────────────────────────── */
+.col-browser__item--locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.col-browser__item--locked:hover { background: transparent; }
+.col-browser__lock {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
 /* ── Animations ─────────────────────────────────────────────────────────── */
 .fade-in {
   animation: fadeIn 0.18s ease;
