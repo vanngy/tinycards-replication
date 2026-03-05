@@ -1,0 +1,1 @@
+// progress type definitions — placeholder
