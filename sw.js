@@ -1,4 +1,4 @@
-const CACHE = 'flashcard-trainer-v13';
+const CACHE = 'flashcard-trainer-v14';
 
 const ASSETS = [
   '.',

@@ -3,6 +3,8 @@ import { ColumnBrowser } from '../components/ColumnBrowser.js';
 import { createSession } from '../logic/studySession.js';
 import { deriveBatchState, findContinueBatch, computeEffectiveUnlocked } from '../logic/progressUtils.js';
 import { exportDeckAsCsv } from '../logic/parseCsv.js';
+import { makeDeck } from '../logic/makeDeck.js';
+import { saveToStorage } from '../storage.js';
 
 function collectLeafNodes(nodes, acc) {
   for (const node of nodes) {
@@ -27,6 +29,23 @@ function cardCountSummaryHtml(cards) {
     </div>
   `;
 }
+
+const LEARNING_STATE_FIELDS = ['learningState', 'consecutiveStrong', 'learnedAt', 'masteredAt'];
+
+function resetDeckProgress(deck, state, navigate) {
+  if (!confirm(`Reset all progress for "${deck.title}"? This cannot be undone.`)) return;
+  const cleanCards = deck.cards.map(c => {
+    const clean = { ...c };
+    for (const f of LEARNING_STATE_FIELDS) delete clean[f];
+    return clean;
+  });
+  const idx = state.decks.findIndex(d => d.id === deck.id);
+  state.decks[idx] = makeDeck(deck.id, deck.title, cleanCards, null, {}, deck.batchNames || []);
+  saveToStorage(state);
+  navigate('deck', { deckId: deck.id });
+}
+
+const RESET_BTN = `<button class="btn btn--danger reset-btn">Reset progress</button>`;
 
 export function DeckView(state, navigate) {
   const deck = state.decks.find(d => d.id === state.routeParams.deckId);
@@ -55,12 +74,15 @@ export function DeckView(state, navigate) {
         <div class="page-deck page-deck--topics">
           <button class="back-btn">&#8592; Back</button>
           <div class="deck-header">
-            <h1>${deck.title}</h1>
-            <p class="deck-header__meta">${deck.cards.length} cards</p>
-            <div class="deck-secondary-actions">
+            <div class="deck-header__titles">
+              <h1>${deck.title}</h1>
+              <p class="deck-header__meta">${deck.cards.length} cards</p>
+            </div>
+            ${RESET_BTN}
+          </div>
+          <div class="deck-secondary-actions">
             <button class="btn btn--secondary te-open-btn">Edit cards</button>
             <button class="btn btn--secondary dl-csv-btn">Download CSV</button>
-          </div>
           </div>
           ${summaryHtml}
           ${cb.html}
@@ -68,6 +90,7 @@ export function DeckView(state, navigate) {
       `,
       bind(root) {
         root.querySelector('.back-btn').addEventListener('click', () => navigate('home', {}));
+        root.querySelector('.reset-btn').addEventListener('click', () => resetDeckProgress(deck, state, navigate));
         root.querySelector('.te-open-btn').addEventListener('click', () =>
           navigate('topicEditor', { deckId: deck.id })
         );
@@ -105,8 +128,11 @@ export function DeckView(state, navigate) {
       <div class="page-deck">
         <button class="back-btn">&#8592; Back</button>
         <div class="deck-header">
-          <h1>${deck.title}</h1>
-          <p class="deck-header__meta">${deck.cards.length} cards &middot; ${deck.batches.length} batch${deck.batches.length !== 1 ? 'es' : ''}</p>
+          <div class="deck-header__titles">
+            <h1>${deck.title}</h1>
+            <p class="deck-header__meta">${deck.cards.length} cards &middot; ${deck.batches.length} batch${deck.batches.length !== 1 ? 'es' : ''}</p>
+          </div>
+          ${RESET_BTN}
         </div>
         ${summaryHtml}
         <div id="bp-mount">${bp.html}</div>
@@ -120,6 +146,7 @@ export function DeckView(state, navigate) {
     `,
     bind(root) {
       root.querySelector('.back-btn').addEventListener('click', () => navigate('home', {}));
+      root.querySelector('.reset-btn').addEventListener('click', () => resetDeckProgress(deck, state, navigate));
       root.querySelector('.be-open-btn').addEventListener('click', () =>
         navigate('batchEditor', { deckId: deck.id })
       );

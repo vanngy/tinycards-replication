@@ -89,6 +89,14 @@ h2 {
   padding: 8px 16px;
 }
 .btn--ghost:hover { border-color: var(--success); color: var(--success); opacity: 1; }
+.btn--danger {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 6px 12px;
+}
+.btn--danger:hover { border-color: #c0392b; color: #c0392b; opacity: 1; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 .back-btn {
@@ -253,7 +261,8 @@ h2 {
 .empty-msg { color: var(--text-muted); font-size: 0.95rem; }
 
 /* ── Deck view ──────────────────────────────────────────────────────────── */
-.deck-header { margin-bottom: 20px; }
+.deck-header { margin-bottom: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.deck-header__titles { flex: 1; min-width: 0; }
 .deck-header__meta { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
 .deck-complete-msg {
   text-align: center;
